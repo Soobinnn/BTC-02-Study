@@ -1,0 +1,1 @@
+Q. 일반적인 분산 원장(distributed ledger) 과 블록체인의 차이점?
