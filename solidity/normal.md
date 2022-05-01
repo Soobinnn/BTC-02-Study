@@ -212,3 +212,28 @@ contract NumberInterface {
 그러니 인터페이스는 컨트랙트 뼈대처럼 보인다고 할 수 있다. 컴파일러도 그렇게 인터페이스를 인식함.
 
 우리의 dapp 코드에 이런 인터페이스를 포함하면 컨트랙트는 다른 컨트랙트에 정의된 함수의 특성, 호출 방법, 예상되는 응답 내용에 대해 알 수 있다.
+
+## 인터페이스 활용하기
+
+아래와 같이 인터페이스가 정의되면,
+```solidity
+contract NumberInterface {
+  function getNum(address _myAddress) public view returns (uint);
+}
+```
+
+다음과 같이 컨트랙트에서 인터페이스를 이용할 수 있다.
+```solidity
+contract MyContract {
+  address NumberInterfaceAddress = 0xab38...
+  // ^ 이더리움상의 FavoriteNumber 컨트랙트 주소이다
+  NumberInterface numberContract = NumberInterface(NumberInterfaceAddress)
+  // 이제 `numberContract`는 다른 컨트랙트를 가리키고 있다.
+
+  function someFunction() public {
+    // 이제 `numberContract`가 가리키고 있는 컨트랙트에서 `getNum` 함수를 호출할 수 있다:
+    uint num = numberContract.getNum(msg.sender);
+    // ...그리고 여기서 `num`으로 무언가를 할 수 있다
+  }
+}
+```
