@@ -229,3 +229,270 @@ MiniMe mini = MiniMe(10, 20, 30);
 예를 들면, uint c; uint32 a; uint32 b;라는 필드로 구성된 구조체가 uint32 a; uint c; uint32 b; 필드로 구성된 구조체보다 가스를 덜 소모한다.
 uint32 필드가 묶여있기 때문
 
+## 시간 단위 (Time units)
+
+솔리디티는 시간을 다룰 수 있는 단위계를 기본적으로 제공
+
+now 변수를 쓰면 현재의 유닉스 타임스탬프(1970년 1월 1일부터 지금까지의 초 단위 합) 값을 얻을 수 있다.
+
+> 참고 : 유닉스 타임은 전통적으로 32비트 숫자로 저장됨. 
+
+이는 유닉스 타임스탬프 값이 32비트로 표시가 되지 않을 만큼 커졌을 때 많은 구형 시스템에 문제가 발생할 "Year 2038" 문제를 일으킬 것
+그러니 만약 우리 DApp이 지금부터 20년 이상 운영되길 원한다면, 우리는 64비트 숫자를 써야 할 것이다.
+하지만 우리 유저들은 그동안 더 많은 가스를 소모해야 하는 문제 존재. 설계를 보고 결정을 해야 함.
+
+솔리디티는 또한 seconds, minutes, hours, days, weeks, years 같은 시간 단위 또한 포함하고 있음.
+
+이들은 그에 해당하는 길이 만큼의 초 단위 uint 숫자로 변환됨.
+example)
+1 minutes = 60
+1 hours = 3600
+1 days = 86400
+
+```
+uint lastUpdated;
+
+// `lastUpdated`를 `now`로 설정
+function updateTimestamp() public {
+  lastUpdated = now;
+}
+
+// 마지막으로 `updateTimestamp`가 호출된 뒤 5분이 지났으면 `true`를, 5분이 아직 지나지 않았으면 `false`를 반환
+function fiveMinutesHavePassed() public view returns (bool) {
+  return (now >= (lastUpdated + 5 minutes));
+}
+```
+> 참고 : now가 기본적으로 uint256을 반환하기 때문에, uint32(...)로 변환이 필수적이다.
+이렇게 함으로써 해당 데이터를 uint32로 명시적으로 변환함.
+example ) uint32(now + 1 days)
+
+##구조체를 인수로 전달하기
+ private 또는 internal 함수에 인수로서 구조체의 storage 포인터를 전달할 수 있다.
+ ```solidity
+ function _doStuff(Zombie storage _zombie) internal {
+  // _zombie로 할 수 있는 것들을 처리
+}
+ ```
+함수에 좀비 ID를 전달하고 좀비를 찾는 대신, 좀비에 대한 참조를 전달할 수 있다.
+
+## Public 함수 & 보안
+모든 public과 external 함수를 검사 필요
+
+함수들이 onlyOwner 같은 제어자를 갖지 않는 이상, 어떤 사용자든 이 함수들을 호출하고 자신들이 원하는 모든 데이터를 함수에 전달할 수 있다.
+
+남용을 막을 가장 쉬운 방법은 internal로 만드는 것
+
+## 함수 제어자의 또 다른 특징
+
+### 인수를 가지는 함수 제어자
+
+```solidity
+// 사용자의 나이를 저장하기 위한 매핑
+mapping (uint => uint) public age;
+
+// 사용자가 특정 나이 이상인지 확인하는 제어자
+modifier olderThan(uint _age, uint _userId) {
+  require (age[_userId] >= _age);
+  _;
+}
+
+// 차를 운전하기 위햐서는 16살 이상이어야 하네(적어도 미국에서는).
+// `olderThan` 제어자를 인수와 함께 호출하려면 이렇게 하면 되네:
+function driveCar(uint _userId) public olderThan(16, _userId) {
+  // 필요한 함수 내용들
+}
+```
+
+## 'VIew' 함수를 사용해 가스 절약하기
+
+함수가 블록체인에서 데이터를 읽기만 하면, view 함수로 만들 수 있다. 이 부분은 가스 최적화를 말할 때 가장 중요한 내용이다
+
+### View 함수는 가스를 소모하지 않는다.
+
+view 함수는 사용자에 의해 외부에서 호출되었을 때 가스를 전혀 소모하지 않는다.
+이건 view 함수가 블록체인 상에서 실제로 어떤 것도 수정하지 않기 떄문 - 데이터를 읽기만 함.
+
+그러니 함수에 view 표시를 하는 것은 web3.js에 이렇게 말하는 것과 같다. 
+"이 함수는 실행할 때 자네 로컬 이더리움 노드에 질의만 날리면 되고, 블록체인에 어떤 트랜잭션도 만들지 않아"
+-> 트랜잭션은 모든 개별 노드에서 실행되어야 하고, 가스를 소모함.
+
+\* 지금은 자네가 사용자들을 위해 DApp의 가스 사용을 최적화하는 비결은 가능한 모든 곳에 읽기 전용의 external view 함수를 쓰는 것이라는 것만 명심
+
+> 참고 : 만약 view 함수가 동일 Contract 내에 있는, view 함수가 아닌 다른 함수에서 내부적으로 호출될 경우, 여전히 가스를 소모할 것
+이것은 다른 함수가 이더리움에 트랜잭션을 생성하고, 이는 모든 개별 노드에서 검증되어야 하기 때문
+** 그러니 view 함수는 외부에서 호출됐을 때에만 무료.
+
+## Storage는 비싸다.
+
+솔리디티에서 더 비싼 연산 중 하나는 바로 storage를 쓰는 것 - 그중에서도 쓰기 연산
+
+이건 자네가 데이터의 일부를 쓰거나 바꿀 때마다, 블록체인에 영구적으로 기록되기 때문이다.
+
+영원히! 지구상의 수천 개의 노드들이 그들의 하드 드라이브에 그 데이터를 저장해야 하고, 블록체인이 커져가면서 이 데이터의 양 또한 같이 커져간ㄷ.. 그러니 이 연산에는 비용이 든다.
+
+비용을 최소화하기 위해서, 진짜 필요한 경우가 아니면 storage에 데이터를 쓰지 않는 것이 좋다. 이를 위해 때때로는 겉보기에 비효율적으로 보이는 프로그래밍 구성을 할 필요가 있다
+-> 어떤 배열에서 내용을 빠르게 찾기 위해, 단순히 변수에 저장하는 것 대신 함수가 호출될 때마다 배열을 memory에 다시 만드는 것처럼
+
+\* 대부분의 프로그래밍 언어에서는, 큰 데이터 집합의 개별 데이터에 모두 접근하는 것은 비용이 비싸다.
+하지만, 솔리디티에서는 그 접근이 external view 함수라면 storage를 사용하는 것보다 더 저렴한 방법이다.
+
+view 함수는 사용자들의 가스를 소모하지 않기 때문이지(가스는 사용자들이 진짜 돈을 쓰는 것이다!)
+
+### 메모리에 배열 선언하기
+
+Storage에 아무것도 쓰지 않고도 함수 안에 새로운 배열을 만들려면 배열에 memory 키워드를 쓰면 된다.
+이 배열은 함수가 끝날 때까지만 존재할 것이고, 이는 storage의 배열을 직접 업데이트하는 것보다 가스 소모 측면에서 훨씬 저렴하다.
+-> 외부에서 호출되는 view 함수라면 무료
+
+```solidity
+function getArray() external pure returns(uint[]) {
+  // 메모리에 길이 3의 새로운 배열을 생성한다.
+  uint[] memory values = new uint[](3);
+  // 여기에 특정한 값들을 넣는다.
+  values.push(1);
+  values.push(2);
+  values.push(3);
+  // 해당 배열을 반환한다.
+  return values;
+}
+```
+
+> 참고 : 메모리 배열은 반드시 길이 인수와 함께 생성되어야 한다.
+메모리 배열은 현재로서는 storage 배열처럼 array.push()로 크기가 조절되지는 않는다.
+이후 버전의 솔리디티에서는 변경될수 도 있음. 
+
+## 반복문
+
+함수 내에서 배열을 다룰 때, 그냥 storage에 해당 배열을 저장하는 것이 아니라 for 반복문을 사용해서 구성해야 할 때가 있을 것이다.
+
+```
+mapping (address => uint[]) public ownerToZombies;
+
+function getZombiesByOwner(address _owner) external view returns (uint[]) {
+  return ownerToZombies[_owner];
+}
+```
+for문을 쓰지 않고 매핑을 사용하면, 이러한 접근 방법은 구현의 간단함 때문에 매력적으로 보인다.
+
+하지만 만약 나중에 한 좀비를 원래 소유자에서 다른 사람에게 전달하는 함수를 구현하게 된다면..?
+
+좀비 전달 함수는 이런 내용이 필요할 것이다
+
+1. 전달할 좀비를 새로운 소유자의 ownerToZombies 배열에 넣는다.
+2. 기존 소유자의 ownerToZombies 배열에서 해당 좀비를 지운다.
+3. 좀비가 지워진 구멍을 메우기 위해 기존 소유자의 배열에서 모든 좀비를 한 칸씩 움직인다.
+4. 배열의 길이를 1 줄인다.
+
+3번째 단계는 극단적으로 가스 소모가 많을 것이다. 왜냐하면 위치를 바꾼 모든 좀비에 대해 쓰기 연산을 해야 하기 때문이다.
+-> 소유자가 20마리의 좀비를 가지고 있고 첫 번째 좀비를 거래한다면, 배열의 순서를 유지하기 위해 우린 19번의 쓰기를 해야 할 것
+
+솔리디티에서 storage에 쓰는 것은 가장 비용이 높은 연산 중 하나이기 때문에, 이 전달 함수에 대한 모든 호출은 가스 측면에서 굉장히 비싸게 될 것
+더 안 좋은 점은, 이 함수가 실행될 때마다 다른 양의 가스를 소모할 것이라는 점.
+사용자가 자신의 군대에 얼마나 많은 좀비를 가지고 있는지, 또 거래되는 좀비의 인덱스에 따라 달라짐. 즉 사용자들은 거래에 가스를 얼마나 쓰게 될지 알 수 없게 됨
+
+> 참고: 물론, 빈 자리를 채우기 위해 마지막 좀비를 움직인 다음, 배열의 길이를 하나 줄여도 되겠지. 하지만 그렇게 하면 교환이 일어날 때마다 좀비 군대의 순서가 바뀌게 될 것
+
+view 함수는 외부에서 호출될 때 가스를 사용하지 않기 때문에, 우린 getZombiesByOwner 함수에서 for 반복문을 사용해서 좀비 배열의 모든 요소에 접근한 후 
+특정 사용자의 좀비들로 구성된 배열을 만들 수 있을 것.
+
+그러고 나면, transfer 함수는 훨씬 비용을 적게 쓰게 될 것이다.
+왜냐하면 storage에서 어떤 배열도 재정렬할 필요가 없기 떄문이다.
+-> 일반적인 직관과는 반대로 이런 접근법이 전체적으로 비용 소모가 더 적다
+
+### for 반복문 사용하기
+```
+// 이 함수는 [2, 4, 6, 8, 10]를 가지는 배열을 반환
+function getEvens() pure external returns(uint[]) {
+  uint[] memory evens = new uint[](5);
+  // 새로운 배열의 인덱스를 추적하는 변수
+  uint counter = 0;
+  // for 반복문에서 1부터 10까지 반복함
+  for (uint i = 1; i <= 10; i++) {
+    // `i`가 짝수라면...
+    if (i % 2 == 0) {
+      // 배열에 i를 추가함
+      evens[counter] = i;
+      // `evens`의 다음 빈 인덱스 값으로 counter를 증가시킴
+      counter++;
+    }
+  }
+  return evens;
+}
+```
+
+### payable
+
+#### 함수 제어자(function modifier) 정리
+함수가 언제, 어디서 호출될 수 있는지 제어하는 접근 제어자(visibility modifier)
+
+- private : Contract 내부의 다른 함수들에서만 호출될 수 있음을 의미
+- internal : private과 비슷하지만, 해당 컨트랙트를 상속하는 컨트랙트에서도 호출될 수 있음.
+- external : 오직 컨트랙트 외부에서만 호출될 수 있다.
+- public : 내외부 모두에서, 어디서든 호출될 수 있다.
+
+#### 상태 제어자(state modifier) 정리
+
+이 제어자는 블록체인과 상호작용 하는 방법에 대해 알려줌.
+
+- view : 해당 함수를 실행해도 어떤 데이터도 저장/변경되지 않음
+- pure : 해당 함수가 어떤 데이터도 블록체인에 저장하지 않을 뿐만 아니라, 블록체인으로부터 어떤 데이터도 읽지 않음
+
+* 이들 모두는 Contract 외부에서 불렸을 때 가스를 전혀 소모하지 않는다 (하지만 다른 함수에 의해 내부적으로 호출됐을 경우에는 가스를 소모).
+
+#### 정의 제어자 정리
+
+- onlyOwner : 함수에 이 제어자들이 어떻게 영향을 줄지를 결정하는 우리만의 논리를 구성할 수 있다.
+
+example)
+```solidity
+function test() external view onlyOwner anotherModifier { /* ... */ }
+```
+
+```
+interface ERC20Interface {
+  function totalSupply() external view returns (uint256);
+  function balanceOf(address account) external view returns (uint256);
+  function transfer(address recipient, uint amount) external returns (bool);
+  function approve(address spender, uint amount) external returns (bool);
+  function allowance(address owner, address spender) external view returns (uint256);
+  function transferFrom(address spender, address recipient, uint256 amount) external returns (bool);
+
+  event Transfer(address indexed from, address indexed to, uint256 amount);
+  event Transfer(address indexed spender, address indexed from, address indexed to, uint256 amount);
+  event Approval(address indexed owner, address indexed spender, uint256 oldAmount, uint256 amount);
+}
+
+contract SimpleToken is ERC20Interface {
+  mapping (address => uint256) private _balances;
+  mapping (address => mapping (address => uint256)) public _allowances;
+
+  uint256 public _totalSupply;
+  string public _name;
+  string public _symbol;
+  uint8 public _decimals;
+
+  constructor(string memory getName, string memory getSymbol) {
+    _name = getName;
+    _symbol = getSymbol;
+    _decimals = 18;
+    _totalSupply = 100000000e18;
+    _balances[msg.sender] = _totalSupply;
+  }
+
+  function name() public view returns (string memory) {
+    return _name;
+  }
+
+  function symbol() public view returns (string memory) {
+    return _symbol;
+  }
+
+  function decimals() public view returns (uint8) {
+    return _decimals;
+  }
+
+  function totalSupply() external view virtual override returns (uint256) {
+    return _totalSupply;
+  }
+}
+```
